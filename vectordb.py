@@ -2,7 +2,9 @@ import math
 import os
 from typing import List
 
+import chromadb
 import pinecone
+from chromadb.config import Settings
 from datasets import load_dataset
 from loguru import logger
 from qdrant_client import QdrantClient
@@ -200,4 +202,68 @@ class QdrantDB(VectorDatabase):
 
     def delete_index(self) -> str:
         self.qdrant_client.delete_collection(collection_name=self.index_name)
+        return "Index deleted"
+
+
+class ChromaDB(VectorDatabase):
+    """ChromaDB class is a subclass of VectorDatabase that interacts
+    with a local Chroma Vector Database(at ./chroma_db). It has the following methods:
+    - upsert: Upserts the documents(text), embeddings, ids and optional metadata
+    into the Chroma collection(index)
+    - query: Queries the Chroma collection(index) with the query embedding along with
+    the metadata
+    - delete_index: Deletes the Chroma collection(index)"""
+
+    def __init__(self, index_name):
+        super().__init__(index_name)
+        self.batch_size = 100  # Adjust the batch size as per your requirements
+
+        self.chroma_client = chromadb.Client(
+            Settings(
+                chroma_db_impl="duckdb+parquet",
+                persist_directory="./chroma_db",  # Optional, defaults to .chromadb/ in the current directory
+            )
+        )
+
+        self.chroma_collection = self.chroma_client.get_or_create_collection(
+            name=self.index_name
+        )
+
+    def upsert(self) -> str:
+        logger.info(f"total vectors from upsert: {len(self.dataset)}")
+        num_vectors = len(self.dataset)
+        logger.info(f"total num of vectors from upsert: {num_vectors}")
+        num_batches = math.ceil(num_vectors / self.batch_size)
+
+        logger.info(f"Upserting {num_vectors} vectors in {num_batches} batches")
+
+        for i in range(num_batches):
+            start_idx = i * self.batch_size
+            end_idx = min((i + 1) * self.batch_size, num_vectors)
+
+            documents = []
+            embeddings = []
+            metadatas = []
+            ids = []
+            for j in range(start_idx, end_idx):
+                documents.append(self.dataset[j]["text"])
+                embeddings.append(self.dataset[j]["emb"])
+                metadatas.append({"title": self.dataset[j]["title"]})
+                ids.append(self.dataset[j]["id"])
+
+            self.chroma_collection.add(
+                documents=documents, embeddings=embeddings, metadatas=metadatas, ids=ids
+            )
+
+        return "Upserted successfully"
+
+    def query(self, query_embedding: List[float]) -> dict:
+        self.chroma_collection.query(
+            query_embeddings=query_embedding,
+            n_results=self.top_k,  # Optional, defaults to 10
+            include=["documents"],
+        )
+
+    def delete_index(self) -> str:
+        self.chroma_client.delete_collection(name=self.index_name)
         return "Index deleted"
