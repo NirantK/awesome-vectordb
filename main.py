@@ -18,6 +18,7 @@ index_name = "wikipedia-embeddings"
 
 vector_db = None
 
+
 # Define the request model
 class QueryRequest(BaseModel):
     query: str
@@ -33,6 +34,8 @@ def get_vector_db() -> Type[VectorDatabase]:
 @app.on_event("startup")
 async def startup_event():
     vector_db = get_vector_db()
+
+
 #     vector_db.upsert()
 
 
