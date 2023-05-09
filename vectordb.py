@@ -23,6 +23,7 @@ class VectorDatabase:
         self.dataset = load_dataset(
             "Cohere/wikipedia-22-12-simple-embeddings", split="train"
         )
+        logger.info(f"Dataset type: {type(self.dataset)}, {self.dataset[0:3]}")
         logger.info(f"Dataset loaded with {len(self.dataset)} records")
         self.top_k = top_k
 
