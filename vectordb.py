@@ -5,6 +5,7 @@ from typing import List
 import pinecone
 from datasets import load_dataset
 from loguru import logger
+import weaviate
 
 
 class VectorDatabase:
@@ -14,7 +15,9 @@ class VectorDatabase:
         # Load the dataset
         self.dataset = load_dataset(
             "Cohere/wikipedia-22-12-simple-embeddings", split="train"
-        )
+        ).select(
+            range(1000)
+        )  # select a subset 1000 rows
         logger.info(f"Dataset loaded with {len(self.dataset)} records")
         self.top_k = top_k
 
@@ -73,12 +76,13 @@ class PineconeDB(VectorDatabase):
         return "Upserted successfully"
 
     def query(self, query_embedding: List[float]) -> dict:
-        return self.index.query(
+        result = self.index.query(
             vector=query_embedding,
             top_k=self.top_k,
-            include_values=True,
+            include_values=False,
             include_metadata=True,
         )
+        return result.to_dict()
 
     def delete_index(self) -> str:
         pinecone.delete_index(self.index_name)
@@ -102,3 +106,76 @@ class PineconeDB(VectorDatabase):
 #     ],
 #     "namespace": "",
 # }
+
+
+class WeaviateDB(VectorDatabase):
+    def __init__(self, index_name):
+        super().__init__(index_name)
+        self.batch_size = 50
+
+        self.weaviate_class = "WikipediaEmbeddings"
+
+        # Instantiate the client with the auth config
+        self.weaviate_client = weaviate.Client(
+            url=os.environ["WEAVIATE_URL"],  # Replace w/ your endpoint
+            auth_client_secret=weaviate.auth.AuthApiKey(
+                api_key=os.environ["WEAVIATE_API_KEY"]
+            ),  # Replace w/ your API Key for the Weaviate instance
+        )
+        logger.info(f"weaviate schema: {self.weaviate_client.schema.get()}")
+
+        schema = self.weaviate_client.schema.get()
+        if any(d["class"] == self.weaviate_class for d in schema["classes"]):
+            logger.info("schema already exists")
+        else:
+            logger.info("schema does not exist, creating it")
+            schema = {
+                "classes": [
+                    {
+                        "class": self.weaviate_class,
+                        "description": "Contains the paragraph of text from Simple Wikipedia along with their embeddings",
+                        "vectorizer": "none",
+                        "properties": [
+                            {
+                                "name": "text",
+                                "dataType": ["text"],
+                            }
+                        ],
+                    }
+                ]
+            }
+
+            self.weaviate_client.schema.create(schema)
+
+    def upsert(self) -> str:
+        self.weaviate_client.batch.configure(batch_size=100)
+
+        with self.weaviate_client.batch as batch:
+            for data in self.dataset:
+                # id = data['id']
+                text = data["text"]
+                ebd = data["emb"]
+                batch_data = {"text": text}
+                batch.add_data_object(
+                    data_object=batch_data, class_name=self.weaviate_class, vector=ebd
+                )
+
+        logger.info("All data added to weaviate")
+
+        return "Upserted successfully"
+
+    def query(self, query_embedding: List[float]) -> dict:
+        vec = {"vector": query_embedding}
+        result = (
+            self.weaviate_client.query.get(self.weaviate_class, ["text"])
+            .with_near_vector(vec)
+            .with_limit(self.top_k)
+            .with_additional(["certainty"])
+            .do()
+        )
+        logger.info(f"weaviate result: {result}")
+        return result
+
+    def delete_index(self) -> str:
+        self.weaviate_client.schema.delete_class(self.weaviate_class)
+        return "Class deleted"
