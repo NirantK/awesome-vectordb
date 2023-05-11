@@ -265,6 +265,29 @@ class WeaviateDB(VectorDatabase):
         return "Upserted successfully"
 
     def query(self, query_embedding: List[float]) -> dict:
+        # Weaviate Output:
+        # {
+        #     "result": {
+        #         "data": {
+        #             "Get": {
+        #                 "WikipediaEmbeddings": [
+        #                     {
+        #                         "_additional": {"certainty": 0.9381886720657349},
+        #                         "text": 'Tertullian was probably the first person to call these books the "Old Testament." He used the Latin name "vetus testamentum" in the 2nd century.',
+        #                     },
+        #                     {
+        #                         "_additional": {"certainty": 0.9381886720657349},
+        #                         "text": 'Tertullian was probably the first person to call these books the "Old Testament." He used the Latin name "vetus testamentum" in the 2nd century.',
+        #                     },
+        #                     {
+        #                         "_additional": {"certainty": 0.9374131262302399},
+        #                         "text": "Other themes in the Old Testament include salvation, redemption, divine judgment, obedience and disobedience, faith and faithfulness. Throughout there is a strong emphasis on ethics and ritual purity. God demands both.",
+        #                     },
+        #                 ]
+        #             }
+        #         }
+        #     }
+        # }
         vec = {"vector": query_embedding}
         result = (
             self.weaviate_client.query.get(self.weaviate_class, ["text"])
@@ -273,7 +296,7 @@ class WeaviateDB(VectorDatabase):
             .with_additional(["certainty"])
             .do()
         )
-        logger.info(f"weaviate result: {result}")
+        # logger.info(f"weaviate result: {result}")
         return result
 
     def delete_index(self) -> str:
