@@ -37,10 +37,7 @@ def get_vector_db() -> Type[VectorDatabase]:
 @app.on_event("startup")
 async def startup_event():
     vector_db = get_vector_db()
-    logger.info(f"{vector_db} is ready to use")
-
-
-#     vector_db.upsert()
+    vector_db.upsert()
 
 
 @app.post("/ask")
