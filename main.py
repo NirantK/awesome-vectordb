@@ -30,8 +30,8 @@ class WrapperQA:
         self.co = cohere.Client(os.environ["COHERE_API_KEY"])
 
         # Initialize the VectorDatabases
+        self.vector_db["qdrant"] = QdrantDB(self.index_name)
         self.vector_db["pinecone"] = PineconeDB(self.index_name)
-        # self.vector_db["qdrant"] = QdrantDB(self.index_name)
         self.vector_db["weaviate"] = WeaviateDB(self.index_name)
 
     def get_vector_db(self, db_name: str):
