@@ -56,7 +56,7 @@ class PineconeDB(VectorDatabase):
             pinecone.create_index(index_name, dimension=self.dimension, metric="cosine")
 
         # Connect to the index
-        self.index = pinecone.Index(index_name=index_name)
+        self.pinecone_index = pinecone.Index(index_name=index_name)
 
     def upsert(self) -> str:
         logger.info(f"total vectors from upsert: {len(self.dataset)}")
@@ -83,7 +83,7 @@ class PineconeDB(VectorDatabase):
                 f"Upserting batch {i + 1} of {num_batches}, from {start_idx} to {end_idx}"
             )
 
-            self.index.upsert(vectors_batch)
+            self.pinecone_index.upsert(vectors_batch)
 
         logger.info(f"Upserted {num_vectors} vectors")
 
@@ -104,7 +104,7 @@ class PineconeDB(VectorDatabase):
         #     ],
         #     "namespace": "",
         # }
-        result = self.index.query(
+        result = self.pinecone_index.query(
             vector=query_embedding,
             top_k=self.top_k,
             include_values=False,
