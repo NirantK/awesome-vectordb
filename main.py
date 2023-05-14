@@ -6,18 +6,27 @@ from fastapi import Depends, FastAPI
 from fastapi.responses import JSONResponse
 from loguru import logger
 from pydantic import BaseModel
+from time import perf_counter
 
 from vectordb import PineconeDB, QdrantDB, VectorDatabase, WeaviateDB
-
-from time import perf_counter
+from vectordb import PineconeDB, QdrantDB, RedisDB, VectorDatabase
 
 # Initializations
 app = FastAPI()
+
+# Initialize Cohere
+co = cohere.Client(os.environ["COHERE_API_KEY"])
+
+# Define the index name
+index_name = "wikipedia-embeddings"
+
+# vector_db = None
 
 
 # Define the request model
 class QueryRequest(BaseModel):
     query: str
+
 
 
 class WrapperQA:
@@ -42,6 +51,13 @@ class WrapperQA:
             db.upsert()
         return {"status": "ok"}
 
+# Dependency function to choose a vector database implementation
+def get_vector_db() -> Type[VectorDatabase]:
+    # Choose either PineconeDatabase or QdrantDatabase here
+    vector_db_class = RedisDB  # or QdrantDatabase
+    return vector_db_class(index_name)
+
+
     def query(self, request: QueryRequest):
         # Get the embeddings from Cohere
         query_embeds = qa_model.co.embed(
@@ -60,13 +76,18 @@ class WrapperQA:
             result_dict[db_name]["query_time"] = t1_stop - t1_start
         return result_dict
 
+
     def delete_index(self):
         for db in self.vector_db.values():
             db.delete_index()
         return {"status": "ok"}
 
 
-qa_model = WrapperQA()
+
+@app.on_event("startup")
+async def startup_event():
+    vector_db = get_vector_db()
+    vector_db.upsert()
 
 
 @app.post("/ask")
@@ -79,6 +100,7 @@ async def ask(request: QueryRequest) -> JSONResponse:
     logger.info(f"Result type: {type(result)}")
     result_dict = {"result": result}
     return JSONResponse(content=result_dict)
+
 
 
 @app.post("/upsert")
