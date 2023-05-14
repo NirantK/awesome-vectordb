@@ -8,7 +8,13 @@ from datasets import load_dataset
 from loguru import logger
 from qdrant_client import QdrantClient
 from qdrant_client.http import models
-from qdrant_client.http.models import CollectionStatus, PointStruct, UpdateStatus
+from qdrant_client.http.models import (
+    CollectionStatus,
+    Distance,
+    PointStruct,
+    UpdateStatus,
+    VectorParams,
+)
 
 
 class VectorDatabase:
@@ -56,7 +62,7 @@ class PineconeDB(VectorDatabase):
             pinecone.create_index(index_name, dimension=self.dimension, metric="cosine")
 
         # Connect to the index
-        self.index = pinecone.Index(index_name=index_name)
+        self.pinecone_index = pinecone.Index(index_name=index_name)
 
     def upsert(self) -> str:
         logger.info(f"total vectors from upsert: {len(self.dataset)}")
@@ -83,7 +89,7 @@ class PineconeDB(VectorDatabase):
                 f"Upserting batch {i + 1} of {num_batches}, from {start_idx} to {end_idx}"
             )
 
-            self.index.upsert(vectors_batch)
+            self.pinecone_index.upsert(vectors_batch)
 
         logger.info(f"Upserted {num_vectors} vectors")
 
@@ -104,7 +110,7 @@ class PineconeDB(VectorDatabase):
         #     ],
         #     "namespace": "",
         # }
-        result = self.index.query(
+        result = self.pinecone_index.query(
             vector=query_embedding,
             top_k=self.top_k,
             include_values=False,
@@ -128,7 +134,7 @@ class QdrantDB(VectorDatabase):
 
     def __init__(self, index_name):
         super().__init__(index_name)
-        self.batch_size = 1000  # Adjust the batch size as per your requirements
+        self.batch_size = 100  # Adjust the batch size as per your requirements
 
         self.qdrant_client = QdrantClient(
             os.environ["QDRANT_URL"],
@@ -136,18 +142,28 @@ class QdrantDB(VectorDatabase):
             api_key=os.environ["QDRANT_API_KEY"],
         )
 
-        collection_info = self.qdrant_client.get_collection(
-            collection_name=self.index_name
-        )
+        qdrant_collections = self.qdrant_client.get_collections()
+        # logger.info(f"qdrant collections: {qdrant_collections.collections}")
 
-        # Create the collection(index) if it doesn't exist
-        if collection_info.status != CollectionStatus.GREEN:
+        # If no collections exist or if the index_name is not present in the collections, create the collection
+        if len(qdrant_collections.collections) == 0 or not any(
+            self.index_name in collection.name
+            for collection in qdrant_collections.collections
+        ):
             self.qdrant_client.recreate_collection(
                 collection_name=self.index_name,
-                vectors_config=models.VectorParams(
-                    size=self.dimension, distance=models.Distance.COSINE
+                vectors_config=VectorParams(
+                    size=self.dimension, distance=Distance.COSINE
                 ),
             )
+
+            collection_info = self.qdrant_client.get_collection(
+                collection_name=self.index_name
+            )
+            if collection_info.status == CollectionStatus.GREEN:
+                logger.info(
+                    f"Collection {self.index_name} created successfully in Qdrant"
+                )
 
     def upsert(self) -> str:
         logger.info(f"total vectors from upsert: {len(self.dataset)}")
@@ -183,29 +199,61 @@ class QdrantDB(VectorDatabase):
 
         logger.info(f"Upserted {num_vectors} vectors")
 
-        return "Upserted successfully"
+        return "Qdrant Upserted successfully"
 
     def query(self, query_embedding: List[float]) -> dict:
         # Qdrant Output:
-        # {
-        #     "result": [
-        #         {"id": 4, "score": 1.362},
-        #         {"id": 1, "score": 1.273},
-        #         {"id": 3, "score": 1.208},
-        #     ],
-        #     "status": "ok",
-        #     "time": 0.000055785,
-        # }
-        return self.qdrant_client.search(
+        # [
+        #     ScoredPoint(
+        #         id=6,
+        #         version=0,
+        #         score=0.8764744997024536,
+        #         payload={
+        #             "text": 'Tertullian was probably the first person to call these books the "Old Testament." He used the Latin name "vetus testamentum" in the 2nd century.'
+        #         },
+        #         vector=None,
+        #     ),
+        #     ScoredPoint(
+        #         id=11,
+        #         version=0,
+        #         score=0.8760372996330261,
+        #         payload={
+        #             "text": "Other themes in the Old Testament include salvation, redemption, divine judgment, obedience and disobedience, faith and faithfulness. Throughout there is a strong emphasis on ethics and ritual purity. God demands both."
+        #         },
+        #         vector=None,
+        #     ),
+        #     ScoredPoint(
+        #         id=592,
+        #         version=5,
+        #         score=0.8568843007087708,
+        #         payload={
+        #             "text": '"We stand here today as nothing more than a representative of the millions of our people who dared to rise up against a social operation whose very essence is war, violence, racism, oppression, repression and the impoverishment of an entire people."'
+        #         },
+        #         vector=None,
+        #     ),
+        # ]
+        result = self.qdrant_client.search(
             collection_name=self.index_name,
             query_vector=query_embedding,
             limit=self.top_k,
             with_payload=True,
         )
+        logger.info(f"Qdrant query result: {result}, type: {type(result)}")
+        result_dict = []
+        for point in result:
+            point_dict = {
+                "id": point.id,
+                "version": point.version,
+                "score": point.score,
+                "payload": point.payload,
+                "vector": point.vector,
+            }
+            result_dict.append(point_dict)
+        return result_dict
 
     def delete_index(self) -> str:
         self.qdrant_client.delete_collection(collection_name=self.index_name)
-        return "Index deleted"
+        return "Qdrant Collection/Index deleted"
 
 
 class WeaviateDB(VectorDatabase):
