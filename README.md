@@ -2,8 +2,7 @@
 
 Your one-stop resource for decision-making and working with VectorDBs aka Vector Databases, Vector Search Engines
 
-Coming from the Accel talk? Deck is here: 
-https://docs.google.com/presentation/d/1OQbXuvZvhQK2spn5FPn2lRzpE5a2uqTj_Uol-Q7Lu7M/edit?usp=sharing
+Coming from the Accel talk? [Deck is here](https://bit.ly/ragvectordb)
 
 # A Comparative Overview of Vector Databases
 
