@@ -2,6 +2,9 @@
 
 Your one-stop resource for decision-making and working with VectorDBs aka Vector Databases, Vector Search Engines
 
+Coming from the Accel talk? Deck is here: 
+https://docs.google.com/presentation/d/1OQbXuvZvhQK2spn5FPn2lRzpE5a2uqTj_Uol-Q7Lu7M/edit?usp=sharing
+
 # A Comparative Overview of Vector Databases
 
 When dealing with high-dimensional data or working on tasks such as similarity search, recommendation systems, and so on, vector databases (also known as vector search engines) are essential. These databases are optimized to handle vector data, enabling efficient storage, updates, and retrieval of vectors.
@@ -9,11 +12,10 @@ When dealing with high-dimensional data or working on tasks such as similarity s
 We'll be focusing on:
 
 1. Security
-2. Streaming index options
-3. Updates
-4. Payload Management
-5. Cost: Various pricing models e.g., GB vs flat
-6. Performance - latency, throughput, RAM, and CPU usage — this is the interesting part and where we started from.
+1. Updates
+1. Payload Management
+1. Cost: Various pricing models e.g., GB vs flat
+1. Performance - latency, throughput, RAM, and CPU usage — this is the interesting part and where we started from.
 
 In this post, we'll explore and compare six popular vector management tools: Pinecone, Qdrant, Weaviate, FAISS, PG Vector, and Redis. Let's dive in!
 
